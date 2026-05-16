@@ -1,0 +1,73 @@
+version: '3.8'
+
+networks:
+  innovatech-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local # Named volume obligatorio para asegurar la persistencia (IE3)
+
+services:
+  # Motor de Base de Datos relacional para la solución
+  database:
+    image: postgres:15-alpine
+    container_name: db_innovatech
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-innovatech2026}
+      POSTGRES_DB: bd_despachos_ventas
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Persistencia de datos del negocio
+    networks:
+      - innovatech-net
+    ports:
+      - "5432:5432"
+
+  # Microservicio Ventas
+  back-ventas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: svc_ventas
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://database:5432/bd_despachos_ventas
+      - SPRING_DATASOURCE_USERNAME=${DB_USER:-postgres}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD:-innovatech2026}
+    depends_on:
+      - database
+    networks:
+      - innovatech-net
+    ports:
+      - "8081:8080" # Expone las APIs de Ventas en el puerto 8081
+
+  # Microservicio Despachos
+  back-despachos:
+    build:
+      context: ../back-Despachos_SpringBoot
+      dockerfile: Dockerfile
+    container_name: svc_despachos
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://database:5432/bd_despachos_ventas
+      - SPRING_DATASOURCE_USERNAME=${DB_USER:-postgres}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD:-innovatech2026}
+    depends_on:
+      - database
+    networks:
+      - innovatech-net
+    ports:
+      - "8082:8080" # Expone las APIs de Despachos en el puerto 8082
+
+  # Aplicación Frontend
+  front-despacho:
+    build:
+      context: ../front_despacho
+      dockerfile: Dockerfile
+    container_name: view_front_despacho
+    depends_on:
+      - back-ventas
+      - back-despachos
+    networks:
+      - innovatech-net
+    ports:
+      - "80:8080" # Expone la interfaz web en el puerto HTTP estándar (80)
